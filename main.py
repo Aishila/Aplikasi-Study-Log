@@ -22,7 +22,20 @@ def tambah_catatan():
         else:
             print("Masukkan angka durasi dalam menit.")
 
-    tanggal = datetime.date.today().isoformat()
+    tanggal_input = input("Tanggal (YYYY-MM-DD atau DD/MM/YYYY) kosong=hari ini: ").strip()
+    if tanggal_input == "":
+        tanggal = datetime.date.today().isoformat()
+    else:
+        try:
+            if "/" in tanggal_input:
+                d = datetime.datetime.strptime(tanggal_input, "%d/%m/%Y").date()
+            else:
+                d = datetime.datetime.strptime(tanggal_input, "%Y-%m-%d").date()
+            tanggal = d.isoformat()
+        except Exception:
+            print("Format tanggal tidak valid. Menggunakan hari ini sebagai tanggal.")
+            tanggal = datetime.date.today().isoformat()
+
     catatan.append({'mapel': mapel, 'topik': topik, 'durasi': durasi, 'tanggal': tanggal})
     print("Catatan tersimpan.")
 
@@ -37,7 +50,7 @@ def lihat_catatan():
 
     print("\n=== Daftar Catatan Belajar ===")
     for i, c in enumerate(catatan, start=1):
-        print(f"{i}. Mapel: {c['mapel']} | Topik: {c['topik']} | Durasi: {c['durasi']} menit")
+        print(f"{i}. [{c.get('tanggal','-')}] Mapel: {c['mapel']} | Topik: {c['topik']} | Durasi: {c['durasi']} menit")
     print("------------------------------")
 
     # Tampilkan perbandingan dengan target hari ini jika ada
@@ -53,15 +66,36 @@ def lihat_catatan():
             print(f"Belum mencapai target. Sisa: {sisa} menit.")
 
 def total_waktu():
-    """Hitung dan tampilkan total durasi dari semua catatan."""
-    total = sum(c['durasi'] for c in catatan)
+    """Hitung dan tampilkan total durasi dari semua catatan.
+
+    Jika pengguna memasukkan tanggal (YYYY-MM-DD atau DD/MM/YYYY),
+    tampilkan total untuk tanggal tersebut.
+    """
+    tanggal_input = input("Tanggal untuk total (YYYY-MM-DD atau DD/MM/YYYY) kosong=semua: ").strip()
+    if tanggal_input == "":
+        total = sum(c['durasi'] for c in catatan)
+        label = "semua catatan"
+    else:
+        try:
+            if "/" in tanggal_input:
+                d = datetime.datetime.strptime(tanggal_input, "%d/%m/%Y").date()
+            else:
+                d = datetime.datetime.strptime(tanggal_input, "%Y-%m-%d").date()
+            date_iso = d.isoformat()
+            total = sum(c['durasi'] for c in catatan if c.get('tanggal') == date_iso)
+            label = f"tanggal {date_iso}"
+        except Exception:
+            print("Format tanggal tidak valid. Menghitung untuk semua catatan.")
+            total = sum(c['durasi'] for c in catatan)
+            label = "semua catatan"
+
     if total == 0:
-        print("Belum ada durasi tercatat.")
+        print(f"Belum ada durasi tercatat untuk {label}.")
         return
 
     jam = total // 60
     menit = total % 60
-    print(f"Total waktu belajar: {total} menit ({jam} jam {menit} menit)")
+    print(f"Total waktu belajar ({label}): {total} menit ({jam} jam {menit} menit)")
 
 def get_target_for_date(date_str):
     """Kembalikan target untuk tanggal tertentu, atau default jika tidak ada."""
