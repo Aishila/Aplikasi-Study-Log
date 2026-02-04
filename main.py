@@ -6,6 +6,19 @@ catatan = []
 targets = {}  # mapping 'YYYY-MM-DD' -> menit
 default_target = None  # jika tidak ada target khusus untuk tanggal
 
+# Warna ANSI sederhana untuk terminal
+RESET = "\033[0m"
+BOLD = "\033[1m"
+FG_RED = "\033[31m"
+FG_GREEN = "\033[32m"
+FG_YELLOW = "\033[33m"
+FG_BLUE = "\033[34m"
+FG_CYAN = "\033[36m"
+BG_GRAY = "\033[47m"
+
+def color(text, code):
+    return f"{code}{text}{RESET}"
+
 def tambah_catatan():
     """Minta input pengguna dan simpan catatan ke list `catatan`.
 
@@ -48,22 +61,61 @@ def lihat_catatan():
         print("Belum ada catatan. Tambah catatan terlebih dahulu.")
         return
 
-    print("\n=== Daftar Catatan Belajar ===")
-    for i, c in enumerate(catatan, start=1):
-        print(f"{i}. [{c.get('tanggal','-')}] Mapel: {c['mapel']} | Topik: {c['topik']} | Durasi: {c['durasi']} menit")
-    print("------------------------------")
+    # Cetak tabel berwarna dengan emoji
+    hdr_emoji = "📚 Study Log"
+    print("\n" + color(hdr_emoji, BOLD + FG_CYAN))
 
-    # Tampilkan perbandingan dengan target hari ini jika ada
+    # Kolom: No, Tanggal, Mapel, Topik, Durasi, Status
+    rows = []
+    for i, c in enumerate(catatan, start=1):
+        tanggal = c.get('tanggal', '-')
+        mapel = c.get('mapel', '-')
+        topik = c.get('topik', '-')
+        dur = c.get('durasi', 0)
+        # tentukan status emoji berdasarkan target hari itu
+        t = get_target_for_date(tanggal)
+        if t:
+            status = '✅' if dur >= t else '⏳'
+        else:
+            status = '📌'
+        rows.append((str(i), tanggal, mapel, topik, f"{dur} m", status))
+
+    # Hitung lebar kolom
+    widths = [max(len(r[col]) for r in ([('No','Tanggal','Mapel','Topik','Durasi','Status')] + rows)) for col in range(6)]
+    # header
+    header = ['No', 'Tanggal', 'Mapel', 'Topik', 'Durasi', 'Status']
+    hdr_line = ' | '.join(color(header[i].ljust(widths[i]), BOLD + FG_BLUE) for i in range(6))
+    print(hdr_line)
+    print(color('-' * (sum(widths) + 3 * 5), FG_CYAN))
+
+    # rows (alternate warna ringan)
+    for r in rows:
+        line = ' | '.join(r[i].ljust(widths[i]) for i in range(6))
+        # beri warna pada durasi/status
+        if '✅' in r[5]:
+            line = line.replace(r[4], color(r[4], FG_GREEN))
+            line = line.replace(r[5], color(r[5], FG_GREEN))
+        elif '⏳' in r[5]:
+            line = line.replace(r[4], color(r[4], FG_YELLOW))
+            line = line.replace(r[5], color(r[5], FG_YELLOW))
+        else:
+            line = line.replace(r[4], color(r[4], FG_CYAN))
+            line = line.replace(r[5], color(r[5], FG_CYAN))
+        print(line)
+
+    print(color('-' * (sum(widths) + 3 * 5), FG_CYAN))
+
+    # Tampilkan perbandingan dengan target hari ini jika ada (ringkasan singkat)
     today = datetime.date.today().isoformat()
     today_total = sum(x['durasi'] for x in catatan if x.get('tanggal') == today)
     today_target = get_target_for_date(today)
     if today_target:
-        print(f"Total hari ini: {today_total} menit. Target harian: {today_target} menit.")
+        status_line = f"Total hari ini: {today_total} menit. Target: {today_target} menit."
         if today_total >= today_target:
-            print("Selamat — target harian tercapai! 🎉")
+            print(color('🎉 ' + status_line, FG_GREEN))
         else:
             sisa = today_target - today_total
-            print(f"Belum mencapai target. Sisa: {sisa} menit.")
+            print(color(f"⚠️  {status_line} Sisa: {sisa} menit.", FG_YELLOW))
 
 def total_waktu():
     """Hitung dan tampilkan total durasi dari semua catatan.
@@ -233,12 +285,20 @@ def ringkasan_mingguan():
     """Tampilkan ringkasan 7 hari terakhir, bandingkan dengan target tiap hari."""
     today = datetime.date.today()
     print("\n=== Ringkasan 7 Hari Terakhir ===")
+    print(color('Tanggal       | Total  | Target | Status', BOLD + FG_BLUE))
+    print(color('-' * 40, FG_CYAN))
     for d in range(6, -1, -1):
         day = (today - datetime.timedelta(days=d)).isoformat()
         total = sum(x['durasi'] for x in catatan if x.get('tanggal') == day)
         t = get_target_for_date(day)
-        status = "-" if not t else ("Tercapai" if total >= t else f"Kurang {t-total}m")
-        print(f"{day}: {total} menit | Target: {t if t else '-'} | {status}")
+        if not t:
+            status = color('−', FG_CYAN) + ' ' + '📌'
+        else:
+            if total >= t:
+                status = color('Tercapai', FG_GREEN) + ' ✅'
+            else:
+                status = color(f'Kurang {t-total}m', FG_YELLOW) + ' ⏳'
+        print(f"{day} | {str(total).rjust(5)} m | {str(t) if t else '-'.rjust(6)} | {status}")
 
 
 def check_today_target_warning():
