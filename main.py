@@ -1,3 +1,6 @@
+import json
+import os
+
 catatan = []
 target_harian = None
 
@@ -73,6 +76,70 @@ def target_harian_menu():
     else:
         print("Input tidak valid. Gunakan angka dalam menit.")
 
+def hapus_catatan():
+    """Hapus catatan berdasarkan nomor yang ditampilkan."""
+    if not catatan:
+        print("Belum ada catatan untuk dihapus.")
+        return
+
+    lihat_catatan()
+    idx = input("Masukkan nomor catatan yang akan dihapus (kosong untuk batal): ").strip()
+    if idx == "":
+        print("Batal menghapus.")
+        return
+    if not idx.isdigit():
+        print("Input tidak valid.")
+        return
+    i = int(idx) - 1
+    if 0 <= i < len(catatan):
+        removed = catatan.pop(i)
+        print(f"Terhapus: {removed['mapel']} - {removed['topik']} ({removed['durasi']} menit)")
+    else:
+        print("Nomor catatan tidak ditemukan.")
+
+def cari_catatan():
+    """Cari catatan berdasarkan nama mapel (case-insensitive)."""
+    if not catatan:
+        print("Belum ada catatan.")
+        return
+    q = input("Cari mapel: ").strip().lower()
+    if not q:
+        print("Kata kunci kosong.")
+        return
+    hasil = [c for c in catatan if q in c['mapel'].lower()]
+    if not hasil:
+        print("Tidak ditemukan catatan untuk mapel tersebut.")
+        return
+    print("\n=== Hasil Pencarian ===")
+    for i, c in enumerate(hasil, start=1):
+        print(f"{i}. Mapel: {c['mapel']} | Topik: {c['topik']} | Durasi: {c['durasi']} menit")
+
+def simpan_catatan(path='catatan.json'):
+    """Simpan list `catatan` ke file JSON."""
+    try:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(catatan, f, ensure_ascii=False, indent=2)
+        print(f"Catatan disimpan ke {path}.")
+    except Exception as e:
+        print("Gagal menyimpan:", e)
+
+def muat_catatan(path='catatan.json'):
+    """Muat catatan dari file JSON jika ada."""
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            catatan.clear()
+            for item in data:
+                # validasi ringan
+                if all(k in item for k in ('mapel', 'topik', 'durasi')):
+                    catatan.append({'mapel': item['mapel'], 'topik': item['topik'], 'durasi': int(item['durasi'])})
+        print(f"Memuat {len(catatan)} catatan dari {path}.")
+    except Exception as e:
+        print("Gagal memuat catatan:", e)
+
 def menu():
     print("\n=== Study Log App ===")
     print("1. Tambah catatan belajar")
@@ -80,6 +147,9 @@ def menu():
     print("3. Total waktu belajar")
     print("4. Keluar")
     print("5. Target harian (set/view)")
+    print("6. Hapus catatan")
+    print("7. Cari catatan (berdasarkan mapel)")
+    print("8. Simpan catatan ke file / Muat dari file")
 
 while True:
     menu()
@@ -96,5 +166,17 @@ while True:
         break
     elif pilihan == "5":
         target_harian_menu()
+    elif pilihan == "6":
+        hapus_catatan()
+    elif pilihan == "7":
+        cari_catatan()
+    elif pilihan == "8":
+        sub = input("Ketik 's' untuk simpan, 'm' untuk muat: ").strip().lower()
+        if sub == 's':
+            simpan_catatan()
+        elif sub == 'm':
+            muat_catatan()
+        else:
+            print("Pilihan tidak dikenali.")
     else:
         print("Pilihan tidak valid")
