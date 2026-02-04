@@ -1,8 +1,10 @@
 import json
 import os
+import datetime
 
 catatan = []
-target_harian = None
+targets = {}  # mapping 'YYYY-MM-DD' -> menit
+default_target = None  # jika tidak ada target khusus untuk tanggal
 
 def tambah_catatan():
     """Minta input pengguna dan simpan catatan ke list `catatan`.
@@ -20,7 +22,8 @@ def tambah_catatan():
         else:
             print("Masukkan angka durasi dalam menit.")
 
-    catatan.append({'mapel': mapel, 'topik': topik, 'durasi': durasi})
+    tanggal = datetime.date.today().isoformat()
+    catatan.append({'mapel': mapel, 'topik': topik, 'durasi': durasi, 'tanggal': tanggal})
     print("Catatan tersimpan.")
 
 def lihat_catatan():
@@ -37,13 +40,16 @@ def lihat_catatan():
         print(f"{i}. Mapel: {c['mapel']} | Topik: {c['topik']} | Durasi: {c['durasi']} menit")
     print("------------------------------")
 
-    if target_harian:
-        total = sum(x['durasi'] for x in catatan)
-        print(f"Total hari ini: {total} menit. Target harian: {target_harian} menit.")
-        if total >= target_harian:
+    # Tampilkan perbandingan dengan target hari ini jika ada
+    today = datetime.date.today().isoformat()
+    today_total = sum(x['durasi'] for x in catatan if x.get('tanggal') == today)
+    today_target = get_target_for_date(today)
+    if today_target:
+        print(f"Total hari ini: {today_total} menit. Target harian: {today_target} menit.")
+        if today_total >= today_target:
             print("Selamat — target harian tercapai! 🎉")
         else:
-            sisa = target_harian - total
+            sisa = today_target - today_total
             print(f"Belum mencapai target. Sisa: {sisa} menit.")
 
 def total_waktu():
@@ -57,24 +63,60 @@ def total_waktu():
     menit = total % 60
     print(f"Total waktu belajar: {total} menit ({jam} jam {menit} menit)")
 
-def target_harian_menu():
-    """Menu sederhana untuk set / lihat target harian."""
-    global target_harian
-    print("\n=== Target Harian ===")
-    if target_harian:
-        print(f"Target saat ini: {target_harian} menit")
-    else:
-        print("Belum ada target harian.")
+def get_target_for_date(date_str):
+    """Kembalikan target untuk tanggal tertentu, atau default jika tidak ada."""
+    if date_str in targets:
+        return targets[date_str]
+    return default_target
 
-    inp = input("Masukkan target harian baru dalam menit (kosong untuk batal): ").strip()
-    if inp == "":
-        print("Batal mengubah target.")
+
+def target_harian_menu():
+    """Menu untuk set target default atau target per tanggal, dan melihat target."""
+    global default_target
+    print("\n=== Target Harian ===")
+    print(f"Target default saat ini: {default_target if default_target else 'belum diset'}")
+    print("1. Set target default (untuk semua hari)")
+    print("2. Set target untuk tanggal tertentu")
+    print("3. Lihat target untuk tanggal tertentu")
+    print("4. Hapus target untuk tanggal tertentu")
+    print("(kosong untuk kembali)")
+    pilih = input("Pilihan: ").strip()
+    if pilih == "":
         return
-    if inp.isdigit():
-        target_harian = int(inp)
-        print(f"Target harian disimpan: {target_harian} menit")
+    if pilih == "1":
+        inp = input("Masukkan target default (menit): ").strip()
+        if inp.isdigit():
+            default_target = int(inp)
+            print(f"Target default disimpan: {default_target} menit")
+        else:
+            print("Input tidak valid.")
+    elif pilih == "2":
+        tanggal = input("Tanggal (YYYY-MM-DD) kosong=hari ini: ").strip()
+        if tanggal == "":
+            tanggal = datetime.date.today().isoformat()
+        menit = input("Target (menit): ").strip()
+        if menit.isdigit():
+            targets[tanggal] = int(menit)
+            print(f"Target untuk {tanggal} disimpan: {menit} menit")
+        else:
+            print("Input tidak valid.")
+    elif pilih == "3":
+        tanggal = input("Tanggal (YYYY-MM-DD) kosong=hari ini: ").strip()
+        if tanggal == "":
+            tanggal = datetime.date.today().isoformat()
+        t = get_target_for_date(tanggal)
+        print(f"Target untuk {tanggal}: {t if t else 'tidak diset'}")
+    elif pilih == "4":
+        tanggal = input("Tanggal (YYYY-MM-DD) kosong=hari ini: ").strip()
+        if tanggal == "":
+            tanggal = datetime.date.today().isoformat()
+        if tanggal in targets:
+            del targets[tanggal]
+            print(f"Target untuk {tanggal} dihapus.")
+        else:
+            print("Tidak ada target untuk tanggal tersebut.")
     else:
-        print("Input tidak valid. Gunakan angka dalam menit.")
+        print("Pilihan tidak valid.")
 
 def hapus_catatan():
     """Hapus catatan berdasarkan nomor yang ditampilkan."""
@@ -117,9 +159,11 @@ def cari_catatan():
 def simpan_catatan(path='catatan.json'):
     """Simpan list `catatan` ke file JSON."""
     try:
+        # Simpan state lengkap: catatan + targets + default_target
+        state = {'catatan': catatan, 'targets': targets, 'default_target': default_target}
         with open(path, 'w', encoding='utf-8') as f:
-            json.dump(catatan, f, ensure_ascii=False, indent=2)
-        print(f"Catatan disimpan ke {path}.")
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        print(f"Catatan dan target disimpan ke {path}.")
     except Exception as e:
         print("Gagal menyimpan:", e)
 
@@ -130,15 +174,49 @@ def muat_catatan(path='catatan.json'):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        # dukung format lama (list) dan format state baru (dict)
         if isinstance(data, list):
             catatan.clear()
             for item in data:
-                # validasi ringan
                 if all(k in item for k in ('mapel', 'topik', 'durasi')):
-                    catatan.append({'mapel': item['mapel'], 'topik': item['topik'], 'durasi': int(item['durasi'])})
-        print(f"Memuat {len(catatan)} catatan dari {path}.")
+                    catatan.append({'mapel': item['mapel'], 'topik': item['topik'], 'durasi': int(item['durasi']), 'tanggal': item.get('tanggal')})
+            print(f"Memuat {len(catatan)} catatan dari {path} (format lama).")
+        elif isinstance(data, dict):
+            catatan.clear()
+            for item in data.get('catatan', []):
+                if all(k in item for k in ('mapel', 'topik', 'durasi')):
+                    catatan.append({'mapel': item['mapel'], 'topik': item['topik'], 'durasi': int(item['durasi']), 'tanggal': item.get('tanggal')})
+            # muat targets jika ada
+            global targets, default_target
+            targets = {k: int(v) for k, v in data.get('targets', {}).items()}
+            default_target = int(data.get('default_target')) if data.get('default_target') else None
+            print(f"Memuat {len(catatan)} catatan dan {len(targets)} target dari {path}.")
     except Exception as e:
         print("Gagal memuat catatan:", e)
+
+
+def ringkasan_mingguan():
+    """Tampilkan ringkasan 7 hari terakhir, bandingkan dengan target tiap hari."""
+    today = datetime.date.today()
+    print("\n=== Ringkasan 7 Hari Terakhir ===")
+    for d in range(6, -1, -1):
+        day = (today - datetime.timedelta(days=d)).isoformat()
+        total = sum(x['durasi'] for x in catatan if x.get('tanggal') == day)
+        t = get_target_for_date(day)
+        status = "-" if not t else ("Tercapai" if total >= t else f"Kurang {t-total}m")
+        print(f"{day}: {total} menit | Target: {t if t else '-'} | {status}")
+
+
+def check_today_target_warning():
+    """Jika ada target hari ini dan belum tercapai, tampilkan peringatan singkat."""
+    today = datetime.date.today().isoformat()
+    t = get_target_for_date(today)
+    if not t:
+        return
+    total = sum(x['durasi'] for x in catatan if x.get('tanggal') == today)
+    if total < t:
+        sisa = t - total
+        print(f"Peringatan: Anda masih kurang {sisa} menit untuk mencapai target hari ini ({t} menit).")
 
 def menu():
     print("\n=== Study Log App ===")
@@ -150,6 +228,10 @@ def menu():
     print("6. Hapus catatan")
     print("7. Cari catatan (berdasarkan mapel)")
     print("8. Simpan catatan ke file / Muat dari file")
+
+# muat data saat startup (jika ada) dan periksa target hari ini
+muat_catatan()
+check_today_target_warning()
 
 while True:
     menu()
